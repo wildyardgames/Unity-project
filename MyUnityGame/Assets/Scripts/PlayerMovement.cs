@@ -28,6 +28,9 @@ public class PlayerMovement : MonoBehaviour
     private float cooldownTimer = 0f;
     private Vector3 rollDirection;
 
+    // Extra speling zodat springen/rollen tijdens rennen altijd lukt
+    private float groundedGraceTimer = 0f;
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -46,7 +49,15 @@ public class PlayerMovement : MonoBehaviour
             cooldownTimer -= Time.deltaTime;
         }
 
-        ApplyGravity();
+        // Geef 0.15 seconden speling nadat je de grond raakt (voorkomt haperende isGrounded tijdens rennen)
+        if (controller.isGrounded)
+        {
+            groundedGraceTimer = 0.15f;
+        }
+        else
+        {
+            groundedGraceTimer -= Time.deltaTime;
+        }
 
         if (isRolling)
         {
@@ -59,14 +70,15 @@ public class PlayerMovement : MonoBehaviour
             CheckJumpInput();
             CheckRollInput();
         }
+
+        // Zwaartekracht als laatste uitvoeren zodat isGrounded stabiel blijft
+        ApplyGravity();
     }
 
     private void AlignWithCamera()
     {
         if (cameraTransform == null) return;
 
-        // Neem alleen de horizontale kijkrichting (Y-as) van de camera over
-        // Zo kijkt de speler altijd dezelfde kant op als jij, zonder voorover te kantelen
         Quaternion targetRotation = Quaternion.Euler(0f, cameraTransform.eulerAngles.y, 0f);
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
     }
@@ -85,7 +97,6 @@ public class PlayerMovement : MonoBehaviour
 
         if (inputDir.magnitude >= 0.1f)
         {
-            // Beweeg relatief aan de richting waar de speler/camera naartoe kijkt
             moveDirection = (transform.forward * inputDir.z + transform.right * inputDir.x).normalized;
 
             bool isSprinting = Keyboard.current.leftShiftKey.isPressed;
@@ -101,15 +112,19 @@ public class PlayerMovement : MonoBehaviour
 
     private void CheckJumpInput()
     {
-        if (Keyboard.current.spaceKey.wasPressedThisFrame && controller.isGrounded)
+        if (Keyboard.current.spaceKey.wasPressedThisFrame && groundedGraceTimer > 0f)
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            groundedGraceTimer = 0f; // Voorkom dubbelsprong
         }
     }
 
     private void CheckRollInput()
     {
-        if (Keyboard.current.leftCtrlKey.wasPressedThisFrame && cooldownTimer <= 0f && controller.isGrounded)
+        // Je kunt nu rollen met Linker Ctrl OF met de C-toets (handig bij toetsenbord-ghosting)
+        bool rollPressed = Keyboard.current.leftCtrlKey.wasPressedThisFrame || Keyboard.current.cKey.wasPressedThisFrame;
+
+        if (rollPressed && cooldownTimer <= 0f && groundedGraceTimer > 0f)
         {
             StartRoll();
         }
